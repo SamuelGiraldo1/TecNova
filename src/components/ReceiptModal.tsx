@@ -47,7 +47,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ movement, onClose })
           <div className="bg-emerald-500/20 border-b border-emerald-500/30 px-6 py-2.5 text-xs text-emerald-300 flex items-center gap-2">
             <Send className="w-4 h-4 text-emerald-400" />
             <span>
-              Comprobantes enviados digitalmente a <strong>{movement.customerEmail || 'cliente@example.com'}</strong> y a <strong>administracion@tecnostock.com</strong>.
+              Comprobantes enviados digitalmente a <strong>{movement.customerEmail || 'cliente@example.com'}</strong> y a <strong>administracion@tecnova.com</strong>.
             </span>
           </div>
         )}
@@ -82,10 +82,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ movement, onClose })
               <div className="flex justify-center mb-1">
                 <Store className="w-8 h-8 text-indigo-600" />
               </div>
-              <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-tight">TECNOSTOCK S.A.S.</h2>
+              <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-tight">TECNOVA S.A.S.</h2>
               <p className="text-[10px] text-slate-600">NIT: 901.458.729-1 • IVA Régimen Común</p>
               <p className="text-[10px] text-slate-600">CC Comercial Tecnológico Local 104</p>
-              <p className="text-[10px] text-slate-600">Tel: +57 300 123 4567 • info@tecnostock.com</p>
+              <p className="text-[10px] text-slate-600">Tel: +57 300 123 4567 • info@tecnova.com</p>
             </div>
 
             {/* Receipt Metadata */}
@@ -151,7 +151,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ movement, onClose })
             <div className="pt-4 text-center space-y-2">
               <div dangerouslySetInnerHTML={{ __html: generateBarcodeSvg(movement.invoiceNumber || 'INV-2026') }} />
               <p className="text-[9px] text-slate-500 leading-tight">
-                ¡Gracias por su compra en TecnoStock! Conservar este comprobante para trámites de garantía (30 días).
+                ¡Gracias por su compra en TecNova! Conservar este comprobante para trámites de garantía (30 días).
               </p>
               <div className="text-[8px] text-slate-400 border-t border-slate-200 pt-1">
                 [ COPIA DUAL: CLIENTE & CONTABILIDAD EMPRESA ]

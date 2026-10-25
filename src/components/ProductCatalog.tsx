@@ -17,7 +17,9 @@ import {
   ScanLine,
   Filter,
   Eye,
-  EyeOff
+  EyeOff,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
 import { Product, User, SalesVelocity } from '../types/inventory';
 import { formatCurrency, getStockStatus, getEffectiveMinStock, generateBarcodeSvg } from '../utils/inventoryUtils';
@@ -60,7 +62,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
     velocity: 'medium' as SalesVelocity,
     supplier: '',
     leadTime: '3 días hábiles',
-    serialNumberRequired: false
+    serialNumberRequired: false,
+    imageUrl: ''
   });
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -100,7 +103,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
       velocity: 'medium',
       supplier: 'TechData Colombia S.A.S.',
       leadTime: '3 días hábiles',
-      serialNumberRequired: false
+      serialNumberRequired: false,
+      imageUrl: ''
     });
     setFormError(null);
     setIsModalOpen(true);
@@ -122,10 +126,26 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
       velocity: product.velocity,
       supplier: product.supplier,
       leadTime: product.leadTime || '3 días hábiles',
-      serialNumberRequired: product.serialNumberRequired
+      serialNumberRequired: product.serialNumberRequired,
+      imageUrl: product.imageUrl || ''
     });
     setFormError(null);
     setIsModalOpen(true);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setFormError('La imagen no debe superar los 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Barcode Scanner Reading Simulation (Tarea 2.2)
@@ -307,12 +327,27 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                         </div>
                       </td>
                       <td className="py-3.5 px-4 max-w-xs">
-                        <div className="font-semibold text-slate-100">{product.name}</div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                          <span>{product.brand} - {product.model}</span>
-                          <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-medium">
-                            {product.category}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          {product.imageUrl ? (
+                            <img 
+                              src={product.imageUrl} 
+                              alt={product.name} 
+                              className="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0" 
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0">
+                              <Package className="w-5 h-5 text-indigo-400" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-semibold text-slate-100">{product.name}</div>
+                            <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                              <span>{product.brand} - {product.model}</span>
+                              <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-medium">
+                                {product.category}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
@@ -453,6 +488,51 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
                 {formData.barcode && (
                   <div className="mt-2" dangerouslySetInnerHTML={{ __html: generateBarcodeSvg(formData.barcode) }} />
                 )}
+              </div>
+
+              {/* Image Upload Zone (HU-002 / Tarea 4.4) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Fotografía / Imagen del Producto</label>
+                <div className="flex items-center gap-4 p-3 bg-slate-950/40 rounded-xl border border-slate-800">
+                  {formData.imageUrl ? (
+                    <div className="relative">
+                      <img src={formData.imageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-slate-700 shadow-md" />
+                      <button 
+                        type="button" 
+                        onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-600 hover:bg-rose-700 rounded-full text-white text-[10px] flex items-center justify-center cursor-pointer shadow"
+                        title="Quitar imagen"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-slate-800 border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500">
+                      <ImageIcon className="w-6 h-6 text-slate-400" />
+                      <span className="text-[9px] mt-1 font-medium">Sin imagen</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1.5">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium cursor-pointer transition-all">
+                      <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                      Cargar foto desde equipo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageFileChange} 
+                        className="hidden" 
+                      />
+                    </label>
+                    <input 
+                      type="url" 
+                      placeholder="O ingrese URL pública de imagen (https://...)" 
+                      value={formData.imageUrl} 
+                      onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })} 
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-[11px] text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Basic Details */}

@@ -48,6 +48,9 @@ export const POSModule: React.FC<POSModuleProps> = ({
   const [customerEmail, setCustomerEmail] = useState('cliente@example.com');
   const [scanMessage, setScanMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [cashReceived, setCashReceived] = useState<string>('');
+
   // Completed sale receipt state
   const [lastCompletedMovement, setLastCompletedMovement] = useState<InventoryMovement | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
@@ -124,8 +127,14 @@ export const POSModule: React.FC<POSModuleProps> = ({
     setCart([]);
   };
 
-  // Calculate totals
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.sellingPrice * item.quantity), 0);
+  // Calculate totals (Sprint 2 - HU-003 / Tarea 5.2)
+  const grossTotal = cart.reduce((sum, item) => sum + (item.product.sellingPrice * item.quantity), 0);
+  const discountAmount = Math.round(grossTotal * (discountPercent / 100));
+  const finalTotal = Math.max(0, grossTotal - discountAmount);
+  const subtotalBase = Math.round(finalTotal * 0.81);
+  const ivaCalculado = finalTotal - subtotalBase;
+  const numCash = parseFloat(cashReceived) || 0;
+  const changeAmount = paymentMethod === 'Efectivo' && numCash > finalTotal ? numCash - finalTotal : 0;
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Fast Checkout (< 3 clicks requirement)
@@ -148,11 +157,11 @@ export const POSModule: React.FC<POSModuleProps> = ({
     const newMovement: Omit<InventoryMovement, 'id' | 'timestamp'> = {
       type: 'VENTA',
       items: movementItems,
-      totalAmount: subtotal,
+      totalAmount: finalTotal,
       userId: currentUser.id,
       userName: currentUser.name,
       userRole: currentUser.role,
-      notes: `Venta POS por ${currentUser.name}`,
+      notes: `Venta por ${currentUser.name}${discountPercent > 0 ? ` (Descuento ${discountPercent}%)` : ''}`,
       invoiceNumber: invoiceNum,
       customerName,
       customerEmail,
@@ -194,7 +203,7 @@ export const POSModule: React.FC<POSModuleProps> = ({
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <ShoppingCart className="w-7 h-7 text-indigo-400" />
-            Terminal de Ventas POS (Salida de Inventario)
+            Terminal de Ventas (Salida de Inventario)
           </h1>
           <p className="text-slate-400 text-xs mt-1">
             Flujo ultra-rápido (&lt; 3 clics). Descuento automático de stock y emisión de comprobantes.
@@ -428,12 +437,78 @@ export const POSModule: React.FC<POSModuleProps> = ({
               </div>
             </div>
 
-            {/* Total Summary & Confirm Button */}
-            <div className="pt-3 border-t border-slate-800 space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400 font-medium">TOTAL A PAGAR</span>
+            {/* Descuentos Aplicables (Sprint 2 - Tarea 5.2) */}
+            <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Descuento Comercial</span>
+                {discountPercent > 0 && (
+                  <span className="text-[11px] font-bold text-amber-400">-{discountPercent}% ({formatCurrency(discountAmount)})</span>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[0, 5, 10, 15].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setDiscountPercent(pct)}
+                    className={`py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      discountPercent === pct
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700/60 hover:text-slate-200'
+                    }`}
+                  >
+                    {pct === 0 ? 'Sin desc.' : `${pct}%`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Efectivo Recibido y Cálculo de Cambio (Tarea 5.2) */}
+            {paymentMethod === 'Efectivo' && (
+              <div className="bg-slate-950/50 p-3 rounded-xl border border-emerald-500/20 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-medium">Efectivo Entregado:</span>
+                  <div className="w-36">
+                    <input
+                      type="number"
+                      placeholder="$ 0"
+                      value={cashReceived}
+                      onChange={(e) => setCashReceived(e.target.value)}
+                      className="w-full px-2.5 py-1 text-right bg-slate-900 border border-slate-700 rounded-lg text-xs font-bold text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+                {numCash > 0 && (
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+                    <span className="text-slate-400">Cambio a Devolver:</span>
+                    <span className={`font-bold ${numCash >= finalTotal ? 'text-emerald-400 text-sm' : 'text-rose-400'}`}>
+                      {numCash >= finalTotal ? formatCurrency(changeAmount) : '⚠️ Faltante: ' + formatCurrency(finalTotal - numCash)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Total Breakdown (Subtotal, IVA 19%, Total Final) */}
+            <div className="pt-3 border-t border-slate-800 space-y-2">
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Subtotal (Base gravable):</span>
+                <span>{formatCurrency(subtotalBase)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>IVA (19% incluido):</span>
+                <span>{formatCurrency(ivaCalculado)}</span>
+              </div>
+              {discountPercent > 0 && (
+                <div className="flex justify-between text-xs text-amber-400 font-semibold">
+                  <span>Descuento aplicado:</span>
+                  <span>-{formatCurrency(discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm pt-1 border-t border-slate-800">
+                <span className="text-slate-200 font-bold">TOTAL A PAGAR</span>
                 <span className="text-2xl font-extrabold text-emerald-400 tracking-tight">
-                  {formatCurrency(subtotal)}
+                  {formatCurrency(finalTotal)}
                 </span>
               </div>
 
@@ -443,7 +518,7 @@ export const POSModule: React.FC<POSModuleProps> = ({
                 className="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-bold rounded-xl shadow-xl shadow-emerald-500/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
               >
                 <Sparkles className="w-5 h-5 text-amber-300" />
-                PROCESAR VENTA Y DESCONTAR STOCK
+                PROCESAR VENTA Y EMITIR COMPROBANTE
               </button>
             </div>
           </div>

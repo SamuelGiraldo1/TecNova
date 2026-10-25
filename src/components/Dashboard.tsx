@@ -65,7 +65,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </span>
             </div>
             <p className="text-slate-400 text-sm mt-1">
-              Resumen en tiempo real del inventario y ventas de <span className="text-indigo-400 font-semibold">TecnoStock</span>.
+              Resumen en tiempo real del inventario y ventas de <span className="text-indigo-400 font-semibold">TecNova</span>.
             </p>
           </div>
 
@@ -75,7 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition-all cursor-pointer flex items-center gap-2"
             >
               <ShoppingCart className="w-4 h-4" />
-              Nueva Venta (POS)
+              Nueva Venta
             </button>
             {isAdmin && (
               <button

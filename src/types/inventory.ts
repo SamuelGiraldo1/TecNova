@@ -30,6 +30,7 @@ export interface Product {
   leadTime: string; // Tiempo de compra/entrega (ej. '3 días', '1 semana')
   serialNumberRequired: boolean;
   status: 'active' | 'inactive'; // Eliminación lógica
+  imageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

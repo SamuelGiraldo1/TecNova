@@ -1,7 +1,6 @@
 import { User } from '../types/inventory';
 import { StorageService } from './storage';
 
-// Simple hashing simulation (SHA-256 string generator using SubtleCrypto or fallback)
 export async function hashPassword(password: string): Promise<string> {
   try {
     const encoder = new TextEncoder();
@@ -10,7 +9,6 @@ export async function hashPassword(password: string): Promise<string> {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   } catch (e) {
-    // Fallback for simple hashing
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
       const char = password.charCodeAt(i);
@@ -24,76 +22,149 @@ export async function hashPassword(password: string): Promise<string> {
 export interface AuthResult {
   success: boolean;
   user?: User;
+  token?: string;
   error?: string;
   remainingLockoutSeconds?: number;
 }
 
+const FAILED_ATTEMPTS_KEY = 'tecnova_failed_attempts';
+const LOCKOUT_KEY = 'tecnova_lockout_until';
+
 export const AuthService = {
-  async login(username: string, passwordAttempt: string): Promise<AuthResult> {
-    const users = StorageService.getUsers();
-    const userIndex = users.findIndex(u => u.username.toLowerCase() === username.trim().toLowerCase());
-
-    if (userIndex === -1) {
-      return { success: false, error: 'Usuario no encontrado.' };
-    }
-
-    const user = users[userIndex];
-
-    if (!user.active) {
-      return { success: false, error: 'La cuenta de usuario está desactivada.' };
-    }
-
-    // Check lockout status (Tarea 1.2: Bloqueo por intentos fallidos)
+  getLockoutSeconds(): number {
+    const lockoutUntil = parseInt(localStorage.getItem(LOCKOUT_KEY) || '0', 10);
     const now = Date.now();
-    if (user.lockoutUntil && user.lockoutUntil > now) {
-      const secondsLeft = Math.ceil((user.lockoutUntil - now) / 1000);
+    if (lockoutUntil > now) {
+      return Math.ceil((lockoutUntil - now) / 1000);
+    }
+    return 0;
+  },
+
+  setFailedAttempt(): { remainingAttempts: number; lockoutSeconds: number } {
+    let attempts = parseInt(localStorage.getItem(FAILED_ATTEMPTS_KEY) || '0', 10) + 1;
+    if (attempts >= 3) {
+      const lockoutUntil = Date.now() + 30 * 1000;
+      localStorage.setItem(LOCKOUT_KEY, String(lockoutUntil));
+      localStorage.setItem(FAILED_ATTEMPTS_KEY, '0');
+      return { remainingAttempts: 0, lockoutSeconds: 30 };
+    }
+    localStorage.setItem(FAILED_ATTEMPTS_KEY, String(attempts));
+    return { remainingAttempts: 3 - attempts, lockoutSeconds: 0 };
+  },
+
+  resetFailedAttempts(): void {
+    localStorage.removeItem(FAILED_ATTEMPTS_KEY);
+    localStorage.removeItem(LOCKOUT_KEY);
+  },
+
+  async login(identifier: string, passwordAttempt: string): Promise<AuthResult> {
+    const lockSeconds = this.getLockoutSeconds();
+    if (lockSeconds > 0) {
       return {
         success: false,
-        error: `Cuenta bloqueada temporalmente por demasiados intentos fallidos. Intente de nuevo en ${secondsLeft} segundos.`,
-        remainingLockoutSeconds: secondsLeft
+        error: `Acceso bloqueado por intentos fallidos. Espere ${lockSeconds}s antes de reintentar.`,
+        remainingLockoutSeconds: lockSeconds
       };
     }
 
-    // Verify password hash
-    const attemptHash = await hashPassword(passwordAttempt);
-    // Standard default passwords check for quick testing ("Admin123!" or "Vendedor123!")
-    const isDefaultAdminPass = user.username === 'admin' && (passwordAttempt === 'Admin123!' || passwordAttempt === 'admin');
-    const isDefaultVendPass = user.username === 'vendedor' && (passwordAttempt === 'Vendedor123!' || passwordAttempt === 'vendedor');
+    const cleanUser = identifier.trim();
 
-    const isValid = attemptHash === user.passwordHash || isDefaultAdminPass || isDefaultVendPass;
+    // Map common aliases
+    let emailToSend = cleanUser;
+    if (cleanUser.toLowerCase() === 'admin') emailToSend = 'admin@tecnova.com';
+    if (cleanUser.toLowerCase() === 'cajero' || cleanUser.toLowerCase() === 'vendedor') emailToSend = 'cajero@tecnova.com';
 
-    if (!isValid) {
-      user.failedAttempts = (user.failedAttempts || 0) + 1;
-      
-      // Lock account if 3 or more failed attempts (Bloqueo 30s)
-      if (user.failedAttempts >= 3) {
-        user.lockoutUntil = now + 30 * 1000; // 30 seconds lockout
-        user.failedAttempts = 0; // Reset counter for next attempt round
-        StorageService.saveUsers(users);
+    // 1. Intentar autenticar contra el Backend Express + MySQL
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToSend, username: cleanUser, password: passwordAttempt })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.token && data.usuario) {
+        this.resetFailedAttempts();
+        localStorage.setItem('tecnova_token', data.token);
+
+        const mappedUser: User = {
+          id: String(data.usuario.id),
+          username: data.usuario.username || cleanUser,
+          name: data.usuario.name || data.usuario.nombre || cleanUser,
+          role: data.usuario.role === 'Admin' ? 'Admin' : 'Vendedor',
+          passwordHash: 'jwt_authenticated',
+          active: true,
+          failedAttempts: 0,
+          lockoutUntil: null
+        };
+
+        StorageService.setCurrentUser(mappedUser);
+        return { success: true, user: mappedUser, token: data.token };
+      } else {
+        const { remainingAttempts, lockoutSeconds } = this.setFailedAttempt();
+        if (lockoutSeconds > 0) {
+          return {
+            success: false,
+            error: 'Ha superado el límite de 3 intentos fallidos. Bloqueo preventivo de 30 segundos.',
+            remainingLockoutSeconds: 30
+          };
+        }
         return {
           success: false,
-          error: 'Ha superado el máximo de 3 intentos fallidos. Su cuenta ha sido bloqueada por 30 segundos.',
-          remainingLockoutSeconds: 30
+          error: `${data.mensaje || 'Credenciales inválidas'}. Intentos restantes: ${remainingAttempts}`
         };
       }
+    } catch (networkError) {
+      // 2. Fallback offline con StorageService local si el servidor estuviera inalcanzable
+      console.warn('Backend Express no respondió, usando autenticación offline local.');
+      const users = StorageService.getUsers();
+      const localUser = users.find(
+        u => u.username.toLowerCase() === cleanUser.toLowerCase() ||
+             u.id.toLowerCase() === cleanUser.toLowerCase()
+      );
 
-      StorageService.saveUsers(users);
+      if (!localUser) {
+        return { success: false, error: 'Usuario no encontrado en la base de datos local.' };
+      }
+
+      const isDefaultAdmin = (cleanUser === 'admin' || cleanUser === 'admin@tecnova.com') && (passwordAttempt === 'Admin123!' || passwordAttempt === 'admin');
+      const isDefaultVend = (cleanUser === 'vendedor' || cleanUser === 'cajero@tecnova.com') && (passwordAttempt === 'Vendedor123!' || passwordAttempt === 'Cajero123!');
+
+      if (isDefaultAdmin || isDefaultVend) {
+        this.resetFailedAttempts();
+        StorageService.setCurrentUser(localUser);
+        return { success: true, user: localUser };
+      }
+
+      const { remainingAttempts, lockoutSeconds } = this.setFailedAttempt();
       return {
         success: false,
-        error: `Contraseña incorrecta. Intentos restantes antes del bloqueo: ${3 - user.failedAttempts}`
+        error: `Contraseña incorrecta. Intentos restantes: ${remainingAttempts}`,
+        remainingLockoutSeconds: lockoutSeconds
       };
     }
+  },
 
-    // Login successful: reset failed attempts & lockout
-    user.failedAttempts = 0;
-    user.lockoutUntil = null;
-    StorageService.saveUsers(users);
-    StorageService.setCurrentUser(user);
-
-    return { success: true, user };
+  async register(nombre: string, email: string, password: string, rol: string): Promise<{ success: boolean; mensaje: string }> {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, email, password, rol })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.mensaje || 'Error al registrar usuario');
+      }
+      return { success: true, mensaje: 'Usuario registrado exitosamente.' };
+    } catch (err: any) {
+      return { success: false, mensaje: err.message || 'Error de conexión con el servidor.' };
+    }
   },
 
   logout(): void {
+    localStorage.removeItem('tecnova_token');
     StorageService.setCurrentUser(null);
   },
 

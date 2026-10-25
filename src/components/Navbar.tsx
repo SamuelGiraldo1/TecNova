@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roleReq: 'all' },
-    { id: 'pos', label: 'Terminal POS (Venta)', icon: ShoppingCart, roleReq: 'all' },
+    { id: 'pos', label: 'Terminal de Ventas', icon: ShoppingCart, roleReq: 'all' },
     { id: 'catalog', label: 'Catálogo de Productos', icon: Package, roleReq: 'all' },
     { id: 'purchases', label: 'Compras (Entradas)', icon: Truck, roleReq: 'Admin' },
     { id: 'returns', label: 'Devoluciones y Mermas', icon: RotateCcw, roleReq: 'Admin' },
@@ -57,7 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-slate-100 tracking-tight">TecnoStock</span>
+                <span className="font-bold text-lg text-slate-100 tracking-tight">TecNova</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-medium">v2.4</span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">Control de Inventario & Punto de Venta</p>
